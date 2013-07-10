@@ -11,11 +11,14 @@ require 'socket'
 require 'grit'
 require 'singleton'
 
+require_relative 'local'
+
 module GitReview
 
   class Github
 
     include Singleton
+    include Internals
 
     attr_reader :github
     attr_accessor :local_repo, :current_requests
@@ -27,10 +30,11 @@ module GitReview
     # setup connection with Github via OAuth
     # @return [String] the username logged in
     def configure_github_access
-      if ::GitReview::Settings.instance.oauth_token
+      settings = ::GitReview::Settings.instance
+      if settings.oauth_token && settings.username
         @github = Octokit::Client.new(
-          :login          => ::GitReview::Settings.instance.username,
-          :oauth_token    => ::GitReview::Settings.instance.oauth_token,
+          :login          => settings.username,
+          :oauth_token    => settings.oauth_token,
           :auto_traversal => true
         )
         @github.login
@@ -43,7 +47,8 @@ module GitReview
     # @return [Repository, nil] the local repo in the current directory
     def initialize_local_repo
       unless source_repo.nil?
-        @local_repo = ::GitReview::Repository.new(:full_name => source_repo)
+        @local_repo = ::GitReview::Repository.new
+        @local_repo.full_name = source_repo
       end
     end
 
@@ -116,7 +121,7 @@ module GitReview
     def update(state='open')
       @current_requests = pull_requests(@local_repo, state)
       repos = @current_requests.collect { |request|
-        repo = request.head.repository
+        repo = request.head.repo
         "#{repo.owner}/#{repo.name}" if repo
       }
       repos.uniq.compact.each do |rep|
