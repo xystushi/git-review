@@ -309,6 +309,51 @@ Available commands:
 HELP_TEXT
     end
 
+  private
+
+    # Returns an array where the 1st item is the title and the 2nd one is the body
+    def create_title_and_body(target_branch)
+      local = ::GitReview::Local.instance
+      source = local.source
+      git_config = local.config
+      commits = git_call("log --format='%H' HEAD...#{target_branch}").
+          lines.count
+      puts "commits: #{commits}"
+      if commits == 1
+        # we can create a really specific title and body
+        title = git_call("log --format='%s' HEAD...#{target_branch}").chomp
+        body  = git_call("log --format='%b' HEAD...#{target_branch}").chomp
+      else
+        title = "[Review] Request from '#{git_config['github.login']}'" +
+            " @ '#{source}'"
+        body  = "Please review the following changes:\n"
+        body += git_call("log --oneline HEAD...#{target_branch}").
+            lines.map{|l| "  * #{l.chomp}"}.join("\n")
+      end
+
+      tmpfile = Tempfile.new('git-review')
+      tmpfile.write(title + "\n\n" + body)
+      tmpfile.flush
+      editor = ENV['TERM_EDITOR'] || ENV['EDITOR']
+      unless editor
+        warn "Please set $EDITOR or $TERM_EDITOR in your .bash_profile."
+      end
+
+      system("#{editor || 'open'} #{tmpfile.path}")
+
+      tmpfile.rewind
+      lines = tmpfile.read.lines.to_a
+      puts lines.inspect
+      title = lines.shift.chomp
+      lines.shift if lines[0].chomp.empty?
+
+      body = lines.join
+
+      tmpfile.unlink
+
+      [title, body]
+    end
+
   end
 
 end
