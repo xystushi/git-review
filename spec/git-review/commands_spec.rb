@@ -329,53 +329,57 @@ describe 'Commands' do
 
   end
 
-  #describe '#create' do
-  #
-  #  context 'when on feature branch' do
-  #
-  #    before(:each) do
-  #      local.stub(:source_branch).and_return(feature_name)
-  #      local.stub(:target_branch).and_return(feature_name)
-  #    end
-  #
-  #  end
-  #
-  #  it 'warns the user about uncommitted changes' do
-  #    assume_uncommitted_changes
-  #    subject.should_receive(:puts).with(include 'uncommitted changes')
-  #    subject.create
-  #  end
-  #
-  #  it 'pushes the commits to a remote branch and creates a pull request' do
-  #    assume_no_requests
-  #    assume_on_feature_branch
-  #    assume_uncommitted_changes false
-  #    assume_local_commits
-  #    assume_title_and_body_set
-  #    assume_change_branches
-  #    subject.should_receive(:git_call).with(
-  #      "push --set-upstream origin #{branch_name}", false, true
-  #    )
-  #    subject.should_receive :update
-  #    github.should_receive(:create_pull_request).with(
-  #      source_repo, 'master', branch_name, title, body
-  #    )
-  #    subject.create
-  #  end
-  #
-  #  it 'lets the user return to the branch she was working on before' do
-  #    assume_no_requests
-  #    assume_uncommitted_changes false
-  #    assume_local_commits
-  #    assume_title_and_body_set
-  #    assume_create_pull_request
-  #    assume_on_feature_branch
-  #    subject.should_receive(:git_call).with('checkout master').ordered
-  #    subject.should_receive(:git_call).with("checkout #{branch_name}").ordered
-  #    subject.create
-  #  end
-  #
-  #end
+  describe '#create' do
+
+    context 'when on feature branch' do
+
+      before(:each) do
+        local.stub(:source_branch).and_return(branch_name)
+        local.stub(:target_branch).and_return('master')
+        subject.stub(:prepare).and_return(['master', branch_name])
+      end
+
+      context 'when there are uncommitted changes' do
+
+        before(:each) do
+          subject.stub(:git_call).with('diff HEAD').and_return('some diffs')
+        end
+
+        it 'warns the user about uncommitted changes' do
+          subject.stub(:puts)
+          subject.should_receive(:puts).with(/uncommitted changes/)
+          subject.create
+        end
+
+      end
+
+      context 'when there are no uncommitted changes' do
+
+        before(:each) do
+          subject.stub(:git_call)
+          subject.stub(:git_call).with('diff HEAD').and_return('')
+          subject.stub(:git_call).with(/cherry/).and_return('some commits')
+        end
+
+        it 'pushes the commits to a remote branch and creates a pull request' do
+          subject.should_receive(:git_call).with(
+              "push --set-upstream origin #{branch_name}", false, true
+          )
+          subject.should_receive(:create_pull_request)
+          subject.create
+        end
+
+        it 'lets the user return to the branch she was working on before' do
+          subject.stub(:create_pull_request)
+          subject.should_receive(:git_call).with("checkout master")
+          subject.create
+        end
+
+      end
+
+    end
+
+  end
 
   describe '#clean' do
 

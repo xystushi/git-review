@@ -124,40 +124,18 @@ module GitReview
     def create
       # prepare original_branch and local_branch
       original_branch, local_branch = prepare
-      target_branch = local.target_branch
-      target_repo = local.target_repo
-      source_branch = local.source_branch
       # don't create request with uncommitted changes in current branch
       unless git_call('diff HEAD').empty?
         puts 'You have uncommitted changes.'
         puts 'Please stash or commit before creating the request.'
         return
       end
-      if git_call("cherry #{target_branch}").empty?
+      if git_call("cherry #{local.target_branch}").empty?
         puts 'Nothing to push to remote yet. Commit something first.'
       else
-        # push latest commits to the remote branch (and by that, create it
-        #   if necessary)
+        # push latest commits to the remote branch (create if necessary)
         git_call("push --set-upstream origin #{local_branch}", debug_mode, true)
-        # gather information before creating pull request
-        requests = github.current_requests
-        last_id = requests.collect(&:number).sort.last.to_i
-        title, body = create_title_and_body(target_branch)
-        # create the actual pull request
-        github.create_pull_request(
-            target_repo, target_branch, source_branch, title, body
-        )
-        # switch back to target_branch and check for success
-        git_call("checkout #{target_branch}")
-        requests = github.current_requests
-        potential_new_request = requests.find { |r| r.title == title }
-        if potential_new_request
-          current_number = potential_new_request.number
-          if current_number > last_id
-            puts "Successfully created new request ##{current_number}"
-            puts "https://github.com/#{target_repo}/pull/#{current_number}"
-          end
-        end
+        create_pull_request
         # return to the user's original branch
         # FIXME: keep track of original branch etc
         git_call("checkout #{original_branch}")
@@ -288,6 +266,29 @@ HELP_TEXT
       end
     end
 
+    def create_pull_request
+      source_branch = local.source_branch
+      target_branch, target_repo = local.target_branch, local.target_repo
+      # gather information before creating pull request
+      last_id = github.current_requests.collect(&:number).sort.last.to_i
+      title, body = create_title_and_body(target_branch)
+      # create the actual pull request
+      github.create_pull_request(
+          target_repo, target_branch, source_branch, title, body
+      )
+      # switch back to target_branch and check for success
+      git_call("checkout #{target_branch}")
+      new_request = github.current_requests.find { |r| r.title == title }
+      if new_request
+        current_number = new_request.number
+        if current_number > last_id
+          puts "Successfully created new request ##{current_number}"
+          puts "https://github.com/#{target_repo}/pull/#{current_number}"
+        end
+      end
+    end
+
+
     # @return [Array(String, String)] the title and the body of pull request
     def create_title_and_body(target_branch)
       source = local.source
@@ -306,13 +307,17 @@ HELP_TEXT
         body += git_call("log --oneline HEAD...#{target_branch}").
             lines.map{|l| "  * #{l.chomp}"}.join("\n")
       end
+      edit_title_and_body(title, body)
+    end
 
+    # TODO: refactor
+    def edit_title_and_body(title, body)
       tmpfile = Tempfile.new('git-review')
       tmpfile.write(title + "\n\n" + body)
       tmpfile.flush
       editor = ENV['TERM_EDITOR'] || ENV['EDITOR']
       unless editor
-        warn "Please set $EDITOR or $TERM_EDITOR in your .bash_profile."
+        warn 'Please set $EDITOR or $TERM_EDITOR in your .bash_profile.'
       end
 
       system("#{editor || 'open'} #{tmpfile.path}")
@@ -322,11 +327,8 @@ HELP_TEXT
       puts lines.inspect
       title = lines.shift.chomp
       lines.shift if lines[0].chomp.empty?
-
       body = lines.join
-
       tmpfile.unlink
-
       [title, body]
     end
 
