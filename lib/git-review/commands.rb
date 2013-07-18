@@ -9,25 +9,19 @@ module GitReview
 
     # List all pending requests.
     def list
-      output = github.current_requests_full.collect { |request|
+      requests = github.current_requests_full.reject { |request|
         # find only pending (= unmerged) requests and output summary
         # explicitly look for local changes Github does not yet know about
-        next if local.merged?(request.head.sha)
-        date_string = format_time(request.updated_at)
-        comments_count = request.comments.to_i + request.review_comments.to_i
-        line = format_text(request.number, 8)
-        line << format_text(date_string, 11)
-        line << format_text(comments_count, 10)
-        line << format_text(request.title, 91)
-      }.compact
+        local.merged?(request.head.sha)
+      }
+      requests.reverse! if next_arg == '--reverse'
       source = local.source
-      if output.empty?
+      if requests.empty?
         puts "No pending requests for '#{source}'."
       else
-        output.reverse! if next_arg == '--reverse'
-        puts "Pending requests for '#{source}':\n" +
-             "ID      Updated    Comments  Title"
-        output.each { |line| puts line }
+        puts "Pending requests for '#{source}':"
+        puts "ID      Updated    Comments  Title"
+        requests.each { |request| print_request(request) }
       end
     end
 
@@ -146,7 +140,6 @@ module GitReview
       puts git_call(command)
     end
 
-
     # Close a specified request.
     def close
       request_number = next_arg
@@ -161,7 +154,6 @@ module GitReview
         puts 'Successfully closed request.'
       end
     end
-
 
     # Prepare local repository to create a new request.
     # People should work on local branches, but especially for single commit
@@ -200,7 +192,6 @@ module GitReview
       end
       [original_branch, local_branch]
     end
-
 
     # Create a new request.
     # TODO: Support creating requests to other repositories and branches (like
@@ -248,7 +239,6 @@ module GitReview
       end
     end
 
-
     # delete obsolete branches (left over from already closed requests)
     def clean
       # pruning is needed to remove deleted branches from your local track
@@ -271,7 +261,6 @@ module GitReview
       end
     end
 
-
     # Start a console session (used for debugging).
     def console
       # TODO: Debugger for Ruby 2.0?
@@ -282,7 +271,6 @@ module GitReview
       debugger
       puts 'Leaving debug console.'
     end
-
 
     # Show a quick reference of available commands.
     def help
@@ -305,6 +293,16 @@ HELP_TEXT
     end
 
   private
+
+    def print_request(request)
+      date_string = format_time(request.updated_at)
+      comments_count = request.comments.to_i + request.review_comments.to_i
+      line = format_text(request.number, 8)
+      line << format_text(date_string, 11)
+      line << format_text(comments_count, 10)
+      line << format_text(request.title, 91)
+      puts line
+    end
 
     # @return [Array(String, String)] the title and the body of pull request
     def create_title_and_body(target_branch)

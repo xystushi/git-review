@@ -24,29 +24,35 @@ describe 'Commands' do
 
   describe '#list' do
 
+    before(:each) do
+      local.stub(:source).and_return('some_source')
+    end
+
     context 'when listing all unmerged pull requests' do
 
+      let(:req1) { request.clone }
+      let(:req2) { request.clone }
+
       before(:each) do
-        github.stub(:current_requests_full).and_return([request, request])
+        req1.title, req2.title = 'first', 'second'
+        github.stub(:current_requests_full).and_return([req1, req2])
         local.stub(:merged?).and_return(false)
-        local.stub(:source).and_return('some_source')
-        request.stub(:title).and_return('first', 'second')
       end
 
       it 'shows them' do
-        subject.stub(:next_arg).and_return(nil)
+        subject.stub(:next_arg)
         subject.should_receive(:puts).with(/Pending requests for 'some_source'/)
         subject.should_not_receive(:puts).with(/No pending requests/)
-        subject.should_receive(:puts).with(/first/).ordered
-        subject.should_receive(:puts).with(/second/).ordered
+        subject.should_receive(:print_request).with(req1).ordered
+        subject.should_receive(:print_request).with(req2).ordered
         subject.list
       end
 
       it 'sorts the output with --reverse option' do
         subject.stub(:next_arg).and_return('--reverse')
-        subject.should_receive(:puts).with(/Pending requests for 'some_source'/)
-        subject.should_receive(:puts).with(/second/).ordered
-        subject.should_receive(:puts).with(/first/).ordered
+        subject.stub(:puts)
+        subject.should_receive(:print_request).with(req2).ordered
+        subject.should_receive(:print_request).with(req1).ordered
         subject.list
       end
 
@@ -54,13 +60,16 @@ describe 'Commands' do
 
     context 'when pull requests are already merged' do
 
-      it 'does not list them' do
+      before(:each) do
         github.stub(:current_requests_full).and_return([request])
         local.stub(:merged?).and_return(true)
-        local.stub(:source).and_return('some_source')
+      end
+
+      it 'does not list them' do
+        subject.stub(:next_arg)
         subject.should_receive(:puts).
             with(/No pending requests for 'some_source'/)
-        subject.should_not_receive(:puts).with(/Pending requests/)
+        subject.should_not_receive(:print_request)
         subject.list
       end
 
@@ -68,11 +77,10 @@ describe 'Commands' do
 
     it 'knows when there are no open pull requests' do
       github.stub(:current_requests_full).and_return([])
-      local.stub(:merged?).and_return(true)
-      local.stub(:source).and_return('some_source')
+      subject.stub(:next_arg)
       subject.should_receive(:puts).
           with(/No pending requests for 'some_source'/)
-      subject.should_not_receive(:puts).with(/Pending requests/)
+      subject.should_not_receive(:print_request)
       subject.list
     end
 
