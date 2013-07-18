@@ -94,12 +94,7 @@ module GitReview
 
     # Close a specified request.
     def close
-      request_number = next_arg
-      request = github.request_exists?(request_number, 'open')
-      unless request
-        puts 'Please specify a valid ID.'
-        return
-      end
+      request = get_request_or_return
       repo = github.source_repo
       github.close_issue(repo, request.number)
       unless github.request_exists?('open', request.number)
@@ -198,18 +193,13 @@ module GitReview
       # determine strategy to clean.
       case @args.size
         when 1
-          if @args.first == '--all'
-            # git review clean --all
-            local.clean_all
-          else
-            # git review clean ID
-            local.clean_single(@args.first)
-          end
+          arg = next_arg
+          arg == '--all' ? local.clean_all : local.clean_single(arg)
         when 2
           # git review clean ID --force
-          local.clean_single(@args.first, @args.last == '--force')
+          local.clean_single(next_arg, next_arg == '--force')
         else
-          puts 'Argument error. Please provide either an ID or "--all".'
+          raise ::GitReview::InvalidArgumentError
       end
     end
 

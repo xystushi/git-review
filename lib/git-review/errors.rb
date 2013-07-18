@@ -20,7 +20,9 @@ module GitReview
   end
 
   class InvalidArgumentError < StandardError
-
+    def message
+      'Please specify valid arguments. See --help for more information.'
+    end
   end
 
   class InvalidRequestIDError < StandardError

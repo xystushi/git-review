@@ -250,19 +250,26 @@ describe 'Commands' do
 
     it 'requires an valid ID' do
       subject.stub(:next_arg).and_return(nil)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.close
+      expect { subject.close }.
+          to raise_error(::GitReview::InvalidRequestIDError)
     end
 
-    it 'closes the request' do
-      subject.stub(:next_arg)
-      github.stub(:request_exists?).and_return(request)
-      github.stub(:source_repo).and_return('some_source')
-      github.should_receive(:close_issue).with('some_source', request_number)
-      github.should_receive(:request_exists?).
-        with('open', request_number).and_return(false)
-      subject.should_receive(:puts).with(/Successfully closed request./)
-      subject.close
+    context 'when the request is valid' do
+
+      before(:each) do
+        subject.stub(:get_request_or_return).and_return(request)
+        subject.stub(:next_arg)
+        github.stub(:source_repo).and_return('some_source')
+      end
+
+      it 'closes the request' do
+        github.should_receive(:close_issue).with('some_source', request_number)
+        github.should_receive(:request_exists?).
+            with('open', request_number).and_return(false)
+        subject.should_receive(:puts).with(/Successfully closed request./)
+        subject.close
+      end
+
     end
 
   end
@@ -380,29 +387,33 @@ describe 'Commands' do
 
     before(:each) do
       subject.stub(:git_call).with('remote prune origin')
+      allow_message_expectations_on_nil
     end
 
     it 'requires either an ID or the additional parameter --all' do
-      subject.instance_variable_set(:@args, [])
-      subject.should_receive(:puts).with(/either an ID or "--all"/)
-      subject.clean
+      subject.args.stub(:size).and_return(0)
+      expect { subject.clean }.
+          to raise_error(::GitReview::InvalidArgumentError)
     end
 
     it 'removes a single obsolete branch with review prefix' do
-      subject.instance_variable_set(:@args, [request_number])
+      subject.args.stub(:size).and_return(1)
+      subject.stub(:next_arg).and_return(request_number)
       local.should_receive(:clean_single).with(request_number)
       subject.clean
     end
 
     it 'removes all obsolete branches with review prefix' do
-      subject.instance_variable_set(:@args, ['--all'])
+      subject.args.stub(:size).and_return(1)
+      subject.stub(:next_arg).and_return('--all')
       local.should_receive(:clean_all)
       subject.clean
     end
 
     it 'deletes a branch with unmerged changes with --force option' do
-      subject.instance_variable_set(:@args, [request_number, '--force'])
-      local.should_receive(:clean_single).with(request_number, force = true)
+      subject.args.stub(:size).and_return(2)
+      subject.stub(:next_arg).and_return(request_number, '--force')
+      local.should_receive(:clean_single).with(request_number, force=true)
       subject.clean
     end
 
