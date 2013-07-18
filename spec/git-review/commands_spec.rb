@@ -132,13 +132,12 @@ describe 'Commands' do
 
     it 'requires an valid ID' do
       subject.stub(:next_arg).and_return(nil)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.browse
+      expect { subject.browse }.
+          to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     it 'opens the pull request page on GitHub in a browser' do
-      subject.stub(:next_arg)
-      github.stub(:request_exists?).and_return(request)
+      subject.stub(:get_request_or_return).and_return(request)
       Launchy.should_receive(:open).with(html_url)
       subject.browse
     end
@@ -149,15 +148,14 @@ describe 'Commands' do
 
     it 'requires an valid ID' do
       subject.stub(:next_arg).and_return(nil)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.checkout
+      expect { subject.checkout }.
+          to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     context 'when the request is valid' do
 
       before(:each) do
-        subject.stub(:puts)
-        github.stub(:request_exists?).and_return(request)
+        subject.stub(:get_request_or_return).and_return(request)
       end
 
       it 'creates a headless state in the local repo with the requests code' do
@@ -180,15 +178,14 @@ describe 'Commands' do
 
     it 'requires an valid ID' do
       subject.stub(:next_arg).and_return(nil)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.approve
+      expect { subject.approve }.
+          to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     context 'when the request is valid' do
 
       before(:each) do
-        subject.stub(:next_arg)
-        github.stub(:request_exists?).and_return(request)
+        subject.stub(:get_request_or_return).and_return(request)
         github.stub(:source_repo).and_return('some_source')
       end
 
@@ -218,22 +215,22 @@ describe 'Commands' do
 
     it 'requires an valid ID' do
       subject.stub(:next_arg).and_return(nil)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.merge
+      expect { subject.merge }.
+          to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     context 'when the request is valid' do
 
       before(:each) do
+        subject.stub(:get_request_or_return).and_return(request)
         subject.stub(:next_arg)
-        github.stub(:request_exists?).and_return(request)
         github.stub(:source_repo)
       end
 
-      it 'checks whether the source repository still exists' do
+      it 'does not proceed if source repo no longer exists' do
         request.head.stub(:repo).and_return(nil)
-        subject.should_receive(:puts).with(/deleted the source repository./)
-        subject.stub(:puts)
+        subject.should_receive(:print_repo_deleted)
+        subject.should_not_receive(:git_call)
         subject.merge
       end
 

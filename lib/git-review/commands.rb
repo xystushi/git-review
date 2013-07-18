@@ -38,23 +38,13 @@ module GitReview
 
     # Open a browser window and review a specified request.
     def browse
-      request_number = next_arg
-      request = github.request_exists?(request_number)
-      unless request
-        puts 'Please specify a valid ID.'
-        return
-      end
+      request = get_request_or_return
       Launchy.open(request.html_url) if request
     end
 
     # Checkout a specified request's changes to your local repository.
     def checkout
-      request_number = next_arg
-      request = github.request_exists?(request_number)
-      unless request
-        puts 'Please specify a valid ID.'
-        return
-      end
+      request = get_request_or_return
       puts 'Checking out changes to your local repository.'
       puts 'To get back to your original state, just run:'
       puts
@@ -69,12 +59,7 @@ module GitReview
 
     # Add an approving comment to the request.
     def approve
-      request_number = next_arg
-      request = github.request_exists?(request_number)
-      unless request
-        puts 'Please specify a valid ID.'
-        return
-      end
+      request = get_request_or_return
       repo = github.source_repo
       # TODO: Make this configurable.
       comment = 'Reviewed and approved.'
@@ -88,39 +73,23 @@ module GitReview
 
     # Accept a specified request by merging it into master.
     def merge
-      request_number = next_arg
-      request = github.request_exists?(request_number)
-      unless request
-        puts 'Please specify a valid ID.'
-        return
+      request = get_request_or_return
+      if request.head.repo
+        option = next_arg  # FIXME: What options are allowed here?
+        message = "Accept request ##{request.number} " +
+            "and merge changes into \"#{local.target}\""
+        command = "merge #{option} -m '#{message}' #{request.head.sha}"
+        puts
+        puts "Request title:"
+        puts "  #{request.title}"
+        puts
+        puts "Merge command:"
+        puts "  git #{command}"
+        puts
+        puts git_call(command)
+      else
+        print_repo_deleted(request)
       end
-      # FIXME: What options are allowed here?
-      option = next_arg
-      unless request.head.repo
-        # someone deleted the source repo
-        user = request.head.user.login
-        url = request.patch_url
-        puts "Sorry, #{user} deleted the source repository."
-        puts "git-review doesn't support this."
-        puts "Tell the contributor not to do this."
-        puts
-        puts "You can still manually patch your repo by running:"
-        puts
-        puts "  curl #{url} | git am"
-        puts
-        return false
-      end
-      message = "Accept request ##{request.number} " +
-          "and merge changes into \"#{local.target}\""
-      command = "merge #{option} -m '#{message}' #{request.head.sha}"
-      puts
-      puts "Request title:"
-      puts "  #{request.title}"
-      puts
-      puts "Merge command:"
-      puts "  git #{command}"
-      puts
-      puts git_call(command)
     end
 
     # Close a specified request.
@@ -306,6 +275,20 @@ HELP_TEXT
       puts 'Progress  :'
       puts
       puts github.discussion(request.number)
+    end
+
+    def print_repo_deleted(request)
+      # someone deleted the source repo
+      user = request.head.user.login
+      url = request.patch_url
+      puts "Sorry, #{user} deleted the source repository."
+      puts "git-review doesn't support this."
+      puts "Tell the contributor not to do this."
+      puts
+      puts "You can still manually patch your repo by running:"
+      puts
+      puts "  curl #{url} | git am"
+      puts
     end
 
     # @return [Array(String, String)] the title and the body of pull request
