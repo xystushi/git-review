@@ -110,30 +110,8 @@ module GitReview
     def prepare
       # remember original branch the user was currently working on
       original_branch = local.source_branch
-      target_branch = local.target_branch
-
       if next_arg == '--new' || !local.on_feature_branch?
-        # ask for branch name if not provided
-        if (branch_name = next_arg).nil?
-          puts 'Please provide a name for the branch:'
-          branch_name = gets.chomp
-        end
-        sanitized_name = branch_name.gsub(/\W+/, '_').downcase
-        # create the new branch (as a copy of the current one)
-        local_branch = "review_#{Time.now.strftime("%y%m%d")}_#{sanitized_name}"
-        git_call("checkout -b #{local_branch}")
-        # make sure we are on the feature branch
-        if local.source_branch == local_branch
-          # stash any uncommitted changes
-          save_uncommitted_changes = local.uncommitted_changes?
-          git_call('stash') if save_uncommitted_changes
-          # go back to master and get rid of pending commits (as these are now
-          #   on the new branch)
-          git_call("checkout #{target_branch}")
-          git_call("reset --hard origin/#{target_branch}")
-          git_call("checkout #{local_branch}")
-          git_call('stash pop') if save_uncommitted_changes
-        end
+        local_branch = move_uncommitted_changes(local.target_branch)
       else
         local_branch = original_branch
       end
@@ -267,8 +245,8 @@ HELP_TEXT
       puts github.discussion(request.number)
     end
 
+    # someone deleted the source repo
     def print_repo_deleted(request)
-      # someone deleted the source repo
       user = request.head.user.login
       url = request.patch_url
       puts "Sorry, #{user} deleted the source repository."
@@ -279,6 +257,35 @@ HELP_TEXT
       puts
       puts "  curl #{url} | git am"
       puts
+    end
+
+    # ask for branch name if not provided
+    # @return [String] sanitized branch name
+    def get_branch_name
+      if (branch_name = next_arg).nil?
+        puts 'Please provide a name for the branch:'
+        branch_name = gets.chomp
+      end
+      branch_name.gsub(/\W+/, '_').downcase
+    end
+
+    # move uncommitted changes from target branch to local branch
+    # @return [String] the new local branch uncommitted changes are moved to
+    def move_uncommitted_changes(target_branch)
+      local_branch = "review_#{Time.now.strftime("%y%m%d")}_#{get_branch_name}"
+      git_call("checkout -b #{local_branch}")
+      # make sure we are on the feature branch
+      if local.source_branch == local_branch
+        # stash any uncommitted changes
+        save_uncommitted_changes = local.uncommitted_changes?
+        git_call('stash') if save_uncommitted_changes
+        # go back to target and get rid of pending commits
+        git_call("checkout #{target_branch}")
+        git_call("reset --hard origin/#{target_branch}")
+        git_call("checkout #{local_branch}")
+        git_call('stash pop') if save_uncommitted_changes
+        local_branch
+      end
     end
 
     # @return [Array(String, String)] the title and the body of pull request

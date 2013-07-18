@@ -276,7 +276,7 @@ describe 'Commands' do
 
   describe '#prepare' do
 
-    context 'when on master branch' do
+    context 'when on master/target branch' do
 
       before(:each) do
         local.stub(:source_branch).and_return('master')
@@ -309,27 +309,21 @@ describe 'Commands' do
 
       it 'sanitizes provided branch names' do
         subject.stub(:next_arg).and_return('wild stuff?')
-        subject.should_receive(:git_call).with(/wild_stuff/)
+        subject.should_receive(:git_call).
+            with(/checkout -b review_\d+_wild_stuff/)
         subject.stub(:git_call)
         subject.prepare
       end
 
-      #it 'moves uncommitted changes to the new branch' do
-      #  subject.stub(:next_arg).and_return(feature_name)
-      #  local.stub(:uncommited_changes?).and_return(true)
-      #  local.stub(:source_branch).and_return(branch_name)
-      #  subject.stub(:git_call)
-      #  subject.should_receive(:git_call).with('stash')
-      #  subject.prepare
-      #end
-      #
-      #it 'moves unpushed commits to the new branch' do
-      #  assume_change_branches :master => :feature
-      #  assume_arguments feature_name
-      #  assume_uncommitted_changes false
-      #  subject.should_receive(:git_call).with(include 'reset --hard')
-      #  subject.prepare
-      #end
+      it 'moves uncommitted changes to the new branch' do
+        subject.stub(:get_branch_name).and_return(feature_name)
+        subject.stub(:git_call)
+        local.stub(:source_branch).and_return(branch_name)
+        local.stub(:uncommited_changes?).and_return(true)
+        subject.should_receive(:git_call).with('stash')
+        subject.should_receive(:git_call).with('reset --hard origin/master')
+        subject.send(:move_uncommitted_changes, 'master')
+      end
 
     end
 
