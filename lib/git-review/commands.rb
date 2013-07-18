@@ -345,7 +345,7 @@ HELP_TEXT
     end
 
     def get_request_or_return
-      request_number = next_arg
+      request_number = next_arg || (raise ::GitReview::InvalidRequestIDError)
       request = github.request_exists?(request_number)
       request || (raise ::GitReview::InvalidRequestIDError)
     end
