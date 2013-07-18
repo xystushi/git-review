@@ -27,30 +27,13 @@ module GitReview
 
     # Show details for a single request.
     def show
-      request_number = next_arg
-      request = github.request_exists?(request_number)
-      unless request
-        puts 'Please specify a valid ID.'
-        return
-      end
+      request = get_request_or_return
       # determine whether to show full diff or just stats
       option = next_arg == '--full' ? '' : '--stat '
       diff = "diff --color=always #{option}HEAD...#{request.head.sha}"
-      comments_count = request.comments.to_i + request.review_comments.to_i
-      puts 'ID        : ' + request.number.to_s
-      puts 'Label     : ' + request.head.label
-      puts 'Updated   : ' + format_time(request.updated_at)
-      puts 'Comments  : ' + comments_count.to_s
-      puts
-      puts request.title
-      puts
-      puts request.body unless request.body.empty?
-      puts
+      print_request_details(request)
       puts git_call(diff)
-      puts
-      puts 'Progress  :'
-      puts
-      puts github.discussion(request_number)
+      print_request_discussions(request)
     end
 
     # Open a browser window and review a specified request.
@@ -304,6 +287,27 @@ HELP_TEXT
       puts line
     end
 
+    def print_request_details(request)
+      comments_count = request.comments.to_i + request.review_comments.to_i
+      puts 'ID        : ' + request.number.to_s
+      puts 'Label     : ' + request.head.label
+      puts 'Updated   : ' + format_time(request.updated_at)
+      puts 'Comments  : ' + comments_count.to_s
+      puts
+      puts request.title
+      puts
+      unless request.body.empty?
+        puts request.body
+        puts
+      end
+    end
+
+    def print_request_discussions(request)
+      puts 'Progress  :'
+      puts
+      puts github.discussion(request.number)
+    end
+
     # @return [Array(String, String)] the title and the body of pull request
     def create_title_and_body(target_branch)
       source = local.source
@@ -356,6 +360,12 @@ HELP_TEXT
 
     def next_arg
       @args.shift
+    end
+
+    def get_request_or_return
+      request_number = next_arg
+      request = github.request_exists?(request_number)
+      request || (raise ::GitReview::InvalidRequestIDError)
     end
 
   end

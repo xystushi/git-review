@@ -90,29 +90,28 @@ describe 'Commands' do
 
     it 'requires an ID' do
       subject.stub(:next_arg).and_return(nil)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.show
+      expect { subject.show }.to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     it 'requires a valid request number' do
       subject.stub(:next_arg).and_return(0)
       github.stub(:request_exists?).and_return(false)
-      subject.should_receive(:puts).with('Please specify a valid ID.')
-      subject.show
+      expect { subject.show }.to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     context 'when the pull request number is valid' do
 
       before(:each) do
-        subject.stub(:next_arg).and_return(1)
-        github.stub(:request_exists?).and_return(request)
+        subject.stub(:get_request_or_return).and_return(request)
+        subject.stub(:puts)
       end
 
       it 'shows stats of the request' do
+        subject.stub(:next_arg).and_return(nil)
         subject.should_receive(:git_call).
             with("diff --color=always --stat HEAD...#{head_sha}")
-        subject.stub(:puts)
-        github.stub(:discussion)
+        subject.stub(:print_request_details)
+        subject.stub(:print_request_discussions)
         subject.show
       end
 
@@ -120,8 +119,8 @@ describe 'Commands' do
         subject.stub(:next_arg).and_return('--full')
         subject.should_receive(:git_call).
             with("diff --color=always HEAD...#{head_sha}")
-        subject.stub(:puts)
-        github.stub(:discussion)
+        subject.stub(:print_request_details)
+        subject.stub(:print_request_discussions)
         subject.show
       end
 
