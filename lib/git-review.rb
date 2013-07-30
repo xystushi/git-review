@@ -6,6 +6,7 @@ require 'launchy'
 require 'time'
 # Use temporary files to allow editing a request's title and body.
 require 'tempfile'
+require 'hashie'
 
 ## Our own dependencies
 

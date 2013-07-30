@@ -45,3 +45,26 @@ module GitReview
 
 end
 
+# patch Sawyer::Resource so that it is serializable after converting to Mash
+module Sawyer
+
+  class Resource
+
+    def to_mash
+      hash = Hashie::Mash.new(self.to_hash)
+      hash.each do |k,v|
+        hash[k] = v.to_mash if v.respond_to?(:to_mash)
+      end
+    end
+
+  end
+
+end
+
+class Array
+
+  def to_mash
+    self.collect { |e| e.respond_to?(:to_mash) ? e.to_mash : e }
+  end
+
+end

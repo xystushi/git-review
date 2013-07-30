@@ -2,6 +2,7 @@ PATH
   remote: .
   specs:
     git-review (1.1.6)
+      hashie
       launchy
       octokit (>= 2.0.0.rc2)
       yajl-ruby
@@ -13,6 +14,7 @@ GEM
     diff-lcs (1.2.4)
     faraday (0.9.0.rc5)
       multipart-post (~> 1.1)
+    hashie (2.0.5)
     launchy (2.3.0)
       addressable (~> 2.3)
     multipart-post (1.2.0)
