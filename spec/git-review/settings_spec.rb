@@ -3,7 +3,7 @@ require_relative '../spec_helper'
 describe 'Settings' do
 
   let(:home_dir) { '/home/foo/' }
-  let(:config_file) { home_dir + '.git_review.yml' }
+  let(:config_file) { home_dir + '.git-review/config.yml' }
 
   describe '#initialize' do
 

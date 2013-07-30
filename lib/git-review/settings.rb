@@ -11,9 +11,9 @@ module GitReview
       @instance ||= new
     end
 
-    # Read settings from ~/.git_review.yml upon initialization.
+    # Read settings from ~/.git-review/config.yml upon initialization.
     def initialize
-      @config_file = File.join(Dir.home, '.git_review.yml')
+      @config_file = File.join(Dir.home, '.git-review/config.yml')
       @config = YAML.load_file(@config_file) if File.exists?(@config_file)
       @config ||= {}
     end
