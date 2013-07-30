@@ -51,21 +51,21 @@ module GitReview
     #   of pull_request can be avoided.
     def request_exists?(number, state='open')
       return false if number.nil?
-      request = @github.pull_request(source_repo, number)
+      request = pull_request(source_repo, number)
       request.state == state ? request : false
     rescue Octokit::NotFound
       false
     end
 
-    # an alias to pull_requests
-    def current_requests
-      @github.pull_requests(source_repo)
+    # alias method to pull_requests
+    def current_requests(source_repo)
+      self.send(:pull_requests, source_repo)
     end
 
     # a more detailed collection of requests
     def current_requests_full
-      @github.pull_requests(source_repo).collect { |request|
-        @github.pull_request(source_repo, request.number)
+      pull_requests(source_repo).collect { |request|
+        pull_request(source_repo, request.number)
       }
     end
 
@@ -104,8 +104,8 @@ module GitReview
     end
 
     def commit_discussion(number)
-      pull_commits = @github.pull_commits(source_repo, number)
-      repo = @github.pull_request(source_repo, number).head.repo.full_name
+      pull_commits = pull_commits(source_repo, number)
+      repo = pull_request(source_repo, number).head.repo.full_name
       discussion = ["Commits on pull request:\n\n"]
       discussion += pull_commits.collect { |commit|
         # commit message
@@ -119,7 +119,7 @@ module GitReview
         result = [output]
 
         # comments on commit
-        comments = @github.commit_comments(repo, commit.sha)
+        comments = commit_comments(repo, commit.sha)
         result + comments.collect { |comment|
           name = comment.user.login
           output = "\e[35m#{name}\e[m "
@@ -137,7 +137,7 @@ module GitReview
     end
 
     def issue_discussion(number)
-      comments = @github.issue_comments(source_repo, number)
+      comments = issue_comments(source_repo, number)
       discussion = ["\nComments on pull request:\n\n"]
       discussion += comments.collect { |comment|
         name = comment.user.login
@@ -163,7 +163,11 @@ module GitReview
     # delegate methods that interact with Github to Octokit client
     def method_missing(method, *args)
       if @github.respond_to?(method)
-        @github.send(method, *args)
+        if CACHEABLE_ACTIONS.include?(method.to_sym)
+          perform_cacheable_action(method, *args)
+        else
+          @github.send(method, *args)
+        end
       else
         super
       end
@@ -174,6 +178,9 @@ module GitReview
     end
 
   private
+
+    CACHEABLE_ACTIONS = %i(pull_requests pull_request issue_comments
+                           commit_comments pull_commits)
 
     def configure_oauth
       begin
@@ -260,6 +267,47 @@ module GitReview
         url.index(insteadof_url) and true_url != nil
       }
       first_match ? [first_match[0], first_match[1][1]] : [nil, nil]
+    end
+
+    def read_from_cache(name)
+      cache_file = File.join(Dir.home, ".git-review/#{name.strip}")
+      File.exists?(cache_file) ? YAML.load_file(cache_file) : {}
+    end
+
+    def write_to_cache(name, content)
+      cache_file = File.join(Dir.home, ".git-review/#{name.strip}")
+      File.open(cache_file, 'w') do |file|
+        file.write(YAML.dump(content))
+      end
+    end
+
+    def perform_cacheable_action(action, *args)
+      # cache name is foo_arg1_arg2, eg. pull_request_user_repo_number
+      cache_name = "#{action}_#{args.join('_')}".gsub(/\W+/, '_')
+      cache = read_from_cache(cache_name)
+      last_modified = cache[:last_modified] || ''
+      response = @github.send(action.to_sym, *args,
+          :headers => {'If-Modified-Since' => last_modified}
+      )
+      headers = @github.last_response.headers
+
+      case headers['status']
+        when /304/
+          # we have the latest content
+          cache[:content]
+        when /200/
+          # the response is the latest content
+          response = response.to_mash
+          new_cache = {
+              :last_modified => headers['last-modified'],
+              :etag => headers['etag'],
+              :content => response
+          }
+          write_to_cache(cache_name, new_cache)
+          response
+        else
+          raise ::GitReview::UnprocessableState
+      end
     end
 
   end
