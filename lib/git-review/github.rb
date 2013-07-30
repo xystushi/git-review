@@ -179,8 +179,8 @@ module GitReview
 
   private
 
-    CACHEABLE_ACTIONS = %i(pull_requests pull_request issue_comments
-                           commit_comments pull_commits)
+    CACHEABLE_ACTIONS = [:pull_requests, :pull_request, :issue_comments,
+                         :commit_comments, :pull_commits]
 
     def configure_oauth
       begin
