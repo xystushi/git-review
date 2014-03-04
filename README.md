@@ -127,12 +127,9 @@ $ git review clean --all
 Installation
 ------------
 
-To install it via Rubygems.org simply do:
+To install it via RubyGems.org simply do:
 
     gem install git-review
-
-(Prefix with `sudo` if necessary)
-
 
 
 Wiki

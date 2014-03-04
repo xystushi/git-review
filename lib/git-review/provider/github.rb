@@ -13,31 +13,19 @@ module GitReview
 
       include ::GitReview::Helpers
 
-      # @return [String] Authenticated username
-      def configure_access
-        if settings.oauth_token && settings.username
-          @client = Octokit::Client.new(
-            login: settings.username,
-            access_token: settings.oauth_token,
-            auto_traversal: true
-          )
-
-          @client.login
-        else
-          configure_oauth
-          configure_access
-        end
+      # Find a request by a specified number and return it (or nil otherwise).
+      def request(number)
+        raise ::GitReview::InvalidRequestIDError unless number
+        attributes = client.pull_request(source_repo, number)
+        Request.from_github(server, attributes)
+      rescue Octokit::NotFound
+        raise ::GitReview::InvalidRequestIDError
       end
 
-      # @return [Boolean, Hash] the specified request if exists, otherwise false.
-      #   Instead of true, the request itself is returned, so another round-trip
-      #   of pull_request can be avoided.
-      def request_exists?(number, state='open')
-        return false if number.nil?
-        request = client.pull_request(source_repo, number)
-        request.state == state ? request : false
-      rescue Octokit::NotFound
-        false
+      # Determine whether a request for a specified number and state exists.
+      def request_exists?(number, state = 'open')
+        request = request(number)
+        request && request.state == state
       end
 
       def request_exists_for_branch?(upstream = false, branch = local.source_branch)
@@ -46,12 +34,12 @@ module GitReview
       end
 
       # an alias to pull_requests
-      def current_requests(repo=source_repo)
-        client.pull_requests(repo)
+      def current_requests(repo = source_repo)
+        client.pull_requests repo
       end
 
       # a more detailed collection of requests
-      def current_requests_full(repo=source_repo)
+      def current_requests_full(repo = source_repo)
         threads = []
         requests = []
         client.pull_requests(repo).each do |req|
@@ -59,7 +47,7 @@ module GitReview
             requests << client.pull_request(repo, req.number)
           }
         end
-        threads.each { |t| t.join }
+        threads.each(&:join)
         requests
       end
 
@@ -154,12 +142,12 @@ module GitReview
       end
 
       # show latest pull request number
-      def latest_request_number(repo=source_repo)
+      def latest_request_number(repo = source_repo)
         current_requests(repo).collect(&:number).sort.last.to_i
       end
 
       # get the number of the request that matches the title
-      def request_number_by_title(title, repo=source_repo)
+      def request_number_by_title(title, repo = source_repo)
         request = current_requests(repo).find { |r| r.title == title }
         request.number if request
       end
@@ -175,14 +163,27 @@ module GitReview
         "git@github.com:#{user_name}/#{repo_name}.git"
       end
 
+      # @return [String] Authenticated username
+      def configure_access
+        configure_oauth unless settings.oauth_token && settings.username
+        @client = Octokit::Client.new(
+          login: settings.username,
+          access_token: settings.oauth_token,
+          auto_traversal: true
+        )
+        @client.login
+      end
+
       private
 
       def configure_oauth
         begin
-          prepare_username_and_password
+          print_auth_message
+          prepare_username unless github_login
+          prepare_password
           prepare_description
           authorize
-        rescue ::GitReview::AuthenticationError => e
+        rescue Octokit::Unauthorized => e
           warn e.message
         rescue ::GitReview::UnprocessableState => e
           warn e.message
@@ -190,17 +191,33 @@ module GitReview
         end
       end
 
-      def prepare_username_and_password
+      def github_login
+        login = git_call 'config github.user'
+        @username = login.chomp if login && !login.empty?
+      end
+
+      def print_auth_message
         puts "Requesting a OAuth token for git-review."
         puts "This procedure will grant access to your public and private "\
         "repositories."
         puts "You can revoke this authorization by visiting the following page: "\
         "https://github.com/settings/applications"
+      end
+
+      def prepare_username
         print "Please enter your GitHub's username: "
         @username = STDIN.gets.chomp
-        print "Please enter your GitHub's password (it won't be stored anywhere): "
+      end
+
+      def prepare_password
+        print "Please enter your GitHub's password for #{@username} "\
+        "(it won't be stored anywhere): "
         @password = STDIN.noecho(&:gets).chomp
-        print "\n"
+      end
+
+      def prepare_otp
+        print "PLease enter your One-Time-Password for GitHub's 2 Factor Authorization:"
+        @otp = STDIN.gets.chomp
       end
 
       def prepare_description(chosen_description=nil)
@@ -218,31 +235,21 @@ module GitReview
       end
 
       def authorize
-        uri = URI('https://api.github.com/authorizations')
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = true
-        req = Net::HTTP::Post.new(uri.request_uri)
-        req.basic_auth(@username, @password)
-        req.body = Yajl::Encoder.encode(
-          {
-            scopes: %w(repo),
-            note: @description
-          }
-        )
-        response = http.request(req)
-        if response.code == '201'
-          parser_response = Yajl::Parser.parse(response.body)
-          save_oauth_token(parser_response['token'])
-        elsif response.code == '401'
-          raise ::GitReview::AuthenticationError
-        else
-          raise ::GitReview::UnprocessableState, response.body
+        client = Octokit::Client.new :login => @username, :password => @password
+        begin
+          auth = client.create_authorization(:scopes => %w(repo),
+                                             :note => @description)
+        rescue Octokit::OneTimePasswordRequired
+          prepare_otp
+          auth = client.create_authorization(:scopes => %w(repo),
+                                             :note => @description,
+                                             :headers => {'X-GitHub-OTP' => @otp})
         end
+        save_oauth_token(auth)
       end
 
-      def save_oauth_token(token)
-        settings = ::GitReview::Settings.instance
-        settings.oauth_token = token
+      def save_oauth_token(auth)
+        settings.oauth_token = auth.token
         settings.username = @username
         settings.save!
         puts "OAuth token successfully created.\n"
@@ -266,6 +273,42 @@ module GitReview
 
     end
 
+  end
+
+end
+
+
+# GitHub specific constructor for git-review's request model.
+class Request
+
+  # Create a new request instance from a GitHub-structured attributes hash.
+  def self.from_github(server, response)
+    self.new(
+      server: server,
+      number: response.number,
+      title: response.title,
+      body: response.body,
+      state: response.state,
+      html_url: response._links.html.href,
+      # FIXME: Where do we get the patch URL from?
+      patch_url: nil,
+      updated_at: response.updated_at,
+      comments: response.comments,
+      review_comments: response.review_comments,
+      head: {
+        sha: response.head.sha,
+        ref: response.head.ref,
+        label: response.head.label,
+        user: {
+          login: response.head.user.login
+        },
+        repo: {
+          # NOTE: This can become nil, if the repo has been deleted ever since.
+          owner: (response.head.repo ? response.head.repo.owner : nil),
+          name: (response.head.repo ? response.head.repo.name : nil)
+        }
+      }
+    )
   end
 
 end

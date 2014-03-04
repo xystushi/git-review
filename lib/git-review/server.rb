@@ -27,14 +27,15 @@ module GitReview
       provider.respond_to?(method) || super
     end
 
+
     private
 
     def init_provider
       @provider = case
       when bitbucket_provider?
-        GitReview::Provider::Bitbucket.new
+        GitReview::Provider::Bitbucket.new self
       when github_provider?
-        GitReview::Provider::Github.new
+        GitReview::Provider::Github.new self
       else
         raise ::GitReview::InvalidGitProviderError
       end
@@ -49,11 +50,11 @@ module GitReview
     end
 
     def fetch_origin_url
-      git_call(call_origin_params)
+      git_call call_origin_params
     end
 
     def call_origin_params
-      "config --get remote.origin.url"
+      'config --get remote.origin.url'
     end
 
   end

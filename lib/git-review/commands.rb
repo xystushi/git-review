@@ -19,32 +19,31 @@ module GitReview
       else
         puts "Pending requests for '#{source}':"
         puts "ID      Updated    Comments  Title".pink
-        print_requests(requests, reverse)
+        requests.sort_by!(&:number)
+        requests.reverse! if reverse
+        requests.collect(&:summary).each(&method(:puts))
       end
     end
 
     # Show details for a single request.
     def show(number, full = false)
-      request = server.get_request_by_number(number)
+      request = server.request(number)
       # Determine whether to show full diff or stats only.
       option = full ? '' : '--stat '
       diff = "diff --color=always #{option}HEAD...#{request.head.sha}"
-      # TODO: Refactor into using Request model.
-      print_request_details request
+      puts request.details
       puts git_call(diff)
-      print_request_discussions request
+      puts request.discussion
     end
 
     # Open a browser window and review a specified request.
     def browse(number)
-      request = server.get_request_by_number(number)
-      # FIXME: Use request.html_url as soon as we are using our Request model.
-      Launchy.open request._links.html.href
+      Launchy.open server.request(number).html_url
     end
 
     # Checkout a specified request's changes to your local repository.
     def checkout(number, branch = true)
-      request = server.get_request_by_number(number)
+      request = server.request(number)
       puts 'Checking out changes to your local repository.'
       puts 'To get back to your original state, just run:'
       puts
@@ -72,7 +71,7 @@ module GitReview
 
     # Add an approving comment to the request.
     def approve(number)
-      request = server.get_request_by_number(number)
+      request = server.request(number)
       repo = server.source_repo
       # TODO: Make this configurable.
       comment = 'Reviewed and approved.'
@@ -86,7 +85,7 @@ module GitReview
 
     # Accept a specified request by merging it into master.
     def merge(number)
-      request = server.get_request_by_number(number)
+      request = server.request(number)
       if request.head.repo
         message = "Accept request ##{request.number} " +
             "and merge changes into \"#{local.target}\""
@@ -100,13 +99,13 @@ module GitReview
         puts
         puts git_call(command)
       else
-        print_repo_deleted request
+        puts request.missing_repo_warning
       end
     end
 
     # Close a specified request.
     def close(number)
-      request = server.get_request_by_number(number)
+      request = server.request(number)
       repo = server.source_repo
       server.close_issue(repo, request.number)
       unless server.request_exists?('open', request.number)
@@ -184,7 +183,7 @@ module GitReview
     # Start a console session (used for debugging)
     def console(number = nil)
       puts 'Entering debug console.'
-      request = server.get_request_by_number(number) if number
+      request = server.request(number) if number
 
       if RUBY_VERSION.to_f >= 2
         begin
@@ -213,60 +212,6 @@ module GitReview
 
 
     private
-
-    def request_summary(request)
-      line = request.number.to_s.review_ljust(8)
-      line << request.updated_at.review_time.review_ljust(11)
-      line << server.comments_count(request).to_s.review_ljust(10)
-      line << request.title.review_ljust(91)
-      line
-    end
-
-    def print_requests(requests, reverse=false)
-      # put all output lines in a hash first, keyed by request number
-      # this is to make sure the order is still correct even if we use
-      #   multi-threading to retrieve the requests
-      output = {}
-      requests.each { |req| output[req.number] = request_summary(req) }
-      numbers = output.keys.sort
-      numbers.reverse! if reverse
-      numbers.each { |n| puts output[n] }
-    end
-
-    def print_request_details(request)
-      comments_count = server.comments_count(request)
-      puts 'ID        : ' + request.number.to_s
-      puts 'Label     : ' + request.head.label
-      puts 'Updated   : ' + request.updated_at.review_time
-      puts 'Comments  : ' + comments_count.to_s
-      puts
-      puts request.title
-      puts
-      unless request.body.empty?
-        puts request.body
-        puts
-      end
-    end
-
-    def print_request_discussions(request)
-      puts 'Progress  :'
-      puts
-      puts server.discussion(request.number)
-    end
-
-    # someone deleted the source repo
-    def print_repo_deleted(request)
-      user = request.head.user.login
-      url = request.patch_url
-      puts "Sorry, #{user} deleted the source repository."
-      puts "git-review doesn't support this."
-      puts "Tell the contributor not to do this."
-      puts
-      puts "You can still manually patch your repo by running:"
-      puts
-      puts "  curl #{url} | git am"
-      puts
-    end
 
     # ask for branch name if not provided
     # @return [String] sanitized branch name

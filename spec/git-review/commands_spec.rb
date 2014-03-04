@@ -10,7 +10,10 @@ describe 'Commands' do
   let(:local) { ::GitReview::Local.any_instance }
 
   before :each do
-    provider.stub(:configure_access).and_return('username')
+    provider.stub(:configure_access).and_return(user_login)
+    request.inspect
+    provider.stub_chain(:client, :pull_request).and_return(request_hash)
+    Request.stub(:from_github).and_return(request)
     subject.stub :puts
   end
 
@@ -28,14 +31,17 @@ describe 'Commands' do
       local.stub(:merged?).and_return(false)
       subject.should_receive(:puts).with(/Pending requests for 'some_source'/)
       subject.should_not_receive(:puts).with(/No pending requests/)
-      subject.should_receive(:print_requests).with([req1, req2], false)
+      req1.should_receive :summary
+      req2.should_receive :summary
       subject.list
     end
 
     it 'allows to sort the list by adding ' + '--reverse'.pink do
-      server.stub(:current_requests_full).and_return([req1, req2])
-      local.stub(:merged?).and_return(false)
-      subject.should_receive(:print_requests).with([req1, req2], true)
+      requests = [req1, req2]
+      server.stub_chain(:current_requests_full, :reject).and_return(requests)
+      Request.any_instance.stub :summary
+      requests.stub(:sort_by!).and_return(requests)
+      requests.should_receive :reverse!
       subject.list true
     end
 
@@ -58,29 +64,25 @@ describe 'Commands' do
 
   describe 'show ID (--full)'.pink do
 
-    before :each do
-      provider.stub(:request_exists?).and_return(request)
-    end
-
     it 'requires a valid request number as ' + 'ID'.pink do
       provider.stub(:request_exists?).and_return(false)
-      expect { subject.show invalid_number }.
+      expect { subject.show nil }.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     it 'shows the request\'s stats' do
       subject.should_receive(:git_call).
         with("diff --color=always --stat HEAD...#{head_sha}")
-      subject.stub :print_request_details
-      subject.stub :print_request_discussions
+      request.stub :details
+      request.stub :discussion
       subject.show request_number
     end
 
     it 'shows the request\'s full diff when adding ' + '--full'.pink do
       subject.should_receive(:git_call).
         with("diff --color=always HEAD...#{head_sha}")
-      subject.stub :print_request_details
-      subject.stub :print_request_discussions
+      request.stub :details
+      request.stub :discussion
       subject.show(request_number, true)
     end
 
@@ -88,13 +90,9 @@ describe 'Commands' do
 
   describe 'browse ID'.pink do
 
-    before :each do
-      provider.stub(:request_exists?).and_return(request)
-    end
-
     it 'requires a valid request number as ' + 'ID'.pink do
       provider.stub(:request_exists?).and_return(false)
-      expect { subject.browse invalid_number }.
+      expect { subject.browse nil }.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 
@@ -111,12 +109,11 @@ describe 'Commands' do
     before :each do
       local.stub(:remote_for_request).with(request).and_return(remote)
       subject.stub(:git_call).with("fetch #{remote}")
-      provider.stub(:request_exists?).and_return(request)
     end
 
     it 'requires a valid request number as ' + 'ID'.pink do
       provider.stub(:request_exists?).and_return(false)
-      expect { subject.checkout invalid_number }.
+      expect { subject.checkout nil }.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 
@@ -159,13 +156,12 @@ describe 'Commands' do
     let(:comment) { 'Reviewed and approved.' }
 
     before :each do
-      provider.stub(:request_exists?).and_return(request)
       server.stub(:source_repo).and_return(head_repo)
     end
 
     it 'requires a valid request number as ' + 'ID'.pink do
       provider.stub(:request_exists?).and_return(false)
-      expect { subject.approve invalid_number }.
+      expect { subject.approve nil }.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 
@@ -190,13 +186,12 @@ describe 'Commands' do
   describe 'merge ID'.pink do
 
     before :each do
-      provider.stub(:request_exists?).and_return(request)
       server.stub :source_repo
     end
 
     it 'requires a valid request number as ' + 'ID'.pink do
       provider.stub(:request_exists?).and_return(false)
-      expect { subject.merge invalid_number }.
+      expect { subject.merge nil}.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 
@@ -210,7 +205,7 @@ describe 'Commands' do
 
     it 'does not proceed if the source repo no longer exists' do
       request.head.stub(:repo).and_return(nil)
-      subject.should_receive :print_repo_deleted
+      request.should_receive :missing_repo_warning
       subject.should_not_receive :git_call
       subject.merge request_number
     end
@@ -220,13 +215,12 @@ describe 'Commands' do
   describe 'close ID'.pink do
 
     before :each do
-      provider.stub(:request_exists?).and_return(request)
       server.stub(:source_repo).and_return(head_repo)
     end
 
     it 'requires a valid request number as ' + 'ID'.pink do
       provider.stub(:request_exists?).and_return(false)
-      expect { subject.close invalid_number }.
+      expect { subject.close nil }.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 
@@ -376,8 +370,7 @@ describe 'Commands' do
     end
 
     it 'allows only valid request numbers as ' + 'ID'.pink do
-      provider.stub(:request_exists?).and_return(false)
-      expect { subject.close invalid_number }.
+      expect { subject.close nil }.
         to raise_error(::GitReview::InvalidRequestIDError)
     end
 

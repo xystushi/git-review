@@ -4,14 +4,15 @@ module GitReview
 
     class Base
 
-      attr_reader :client
-      attr_accessor :source_repo
+      attr_reader :client, :server
+      attr_writer :source_repo
 
       def self.instance
         @instance ||= new
       end
 
-      def initialize
+      def initialize(server)
+        @server = server
         configure_access
       end
 
@@ -49,11 +50,6 @@ module GitReview
         end
 
         [user, project]
-      end
-
-      # Ensure we find the right request
-      def get_request_by_number(request_number)
-        request_exists?(request_number) || (raise ::GitReview::InvalidRequestIDError)
       end
 
       def method_missing(method, *args)
