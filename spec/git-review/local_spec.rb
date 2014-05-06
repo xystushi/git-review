@@ -5,6 +5,10 @@ describe 'Local' do
 
   subject { ::GitReview::Local.new }
 
+  before :each do
+    ::GitReview::Provider::Github.any_instance.stub :configure_oauth
+  end
+
   describe '.instance' do
 
     it 'gives back the same instance' do
@@ -74,15 +78,17 @@ describe 'Local' do
     end
 
     it 'finds an existing remote for a branch' do
-      subject.should_receive(:git_call).with('branch -lvv').and_return(
-        "#{branch_name}     00aa0a0 [#{remote}/#{branch_name}: ahead 1] Foo Bar\n"
+      cmd = "for-each-ref --format='%(upstream:short)' $(git symbolic-ref -q HEAD)"
+      subject.should_receive(:git_call).with(cmd).and_return(
+        "#{remote}/#{branch_name}\n"
       )
       subject.remote_for_branch(branch_name).should == remote
     end
 
     it 'returns nil for a local branch without a remote' do
-      subject.should_receive(:git_call).with('branch -lvv').
-        and_return("* #{branch_name}     00aa0a0 Foo Bar\n")
+      cmd = "for-each-ref --format='%(upstream:short)' $(git symbolic-ref -q HEAD)"
+      subject.should_receive(:git_call).with(cmd).
+        and_return("\n")
       subject.remote_for_branch(branch_name).should == nil
     end
 
