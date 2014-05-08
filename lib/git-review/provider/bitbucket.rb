@@ -1,3 +1,6 @@
+require 'faraday_middleware'
+require 'OAuth'
+
 module GitReview
 
   module Provider
@@ -9,13 +12,8 @@ module GitReview
       attr_reader :bitbucket
 
       def configure_access
-      end
-
-      def source_repo
-      end
-
-      def update
-        git_call('fetch origin')
+        configure_oauth unless authenticated?
+        @connection = connection
       end
 
     private
@@ -71,7 +69,7 @@ module GitReview
         @connection = connection
         @connection.basic_auth @username, @password
         response = @connection.post "/1.0/users/#{@username}/consumers" do |req|
-          request.body = Yajl.dump(
+          req.body = Yajl.dump(
               {
                   :name => 'git-review',
                   :description => @description
@@ -113,19 +111,33 @@ module GitReview
 
       def connection(options={})
         connection = Faraday.new('https://api.bitbucket.org') do |c|
+          c.request :oauth, oauth_tokens if authenticated?
           c.request :json
           c.response :mashify
-          c.response  :json
+          c.response :json
           c.adapter Faraday.default_adapter
         end
-
-        if @username && @password
-          connection.basic_auth @username, @password
-        end
-
         connection.headers[:user_agent] = 'Git-Review'
-
         connection
+      end
+
+      def authenticated?
+        settings.bitbucket_consumer_key &&
+            settings.bitbucket_consumer_secret &&
+            settings.bitbucket_token &&
+            settings.bitbucket_token_secret
+      end
+
+      def oauth_tokens
+        @oauth_tokens ||=
+            if authenticated?
+              {
+                  :consumer_key => settings.bitbucket_consumer_key,
+                  :consumer_secret => settings.bitbucket_consumer_secret,
+                  :token => settings.bitbucket_token,
+                  :token_secret => settings.bitbucket_token_secret
+              }
+            end
       end
 
     end
