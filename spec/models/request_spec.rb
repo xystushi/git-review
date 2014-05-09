@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe Request do
+describe ::GitReview::Request do
 
   include_context 'request_context'
 
@@ -15,7 +15,7 @@ describe Request do
   end
 
   it 'has a nested attribute :head' do
-    subject.head.class.should == Commit
+    subject.head.class.should == ::GitReview::Commit
   end
 
   it 'builds a one-line summary' do

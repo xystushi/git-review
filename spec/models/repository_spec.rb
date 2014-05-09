@@ -1,8 +1,8 @@
 require 'spec_helper'
 
-describe Repository do
+describe ::GitReview::Repository do
 
-  subject { Repository.new }
+  subject { ::GitReview::Repository.new }
 
   it 'has accessible attributes' do
     subject.should be_accessible

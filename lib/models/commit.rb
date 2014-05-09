@@ -1,13 +1,17 @@
-class Commit
+module GitReview
 
-  include Accessible
-  extend Nestable
+  class Commit
 
-  nests user: User,
-        repo: Repository
+    include Accessible
+    extend Nestable
 
-  attr_accessor :sha,
-                :ref,
-                :label
+    nests user: User,
+          repo: Repository
+
+    attr_accessor :sha,
+                  :ref,
+                  :label
+
+  end
 
 end

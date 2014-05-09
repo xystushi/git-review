@@ -101,7 +101,7 @@ describe 'Provider: Github' do
 
     it 'will only create a request instance if a request number is specified' do
       expect { subject.request(nil) }.
-        to raise_error(GitReview::InvalidRequestIDError)
+        to raise_error(::GitReview::InvalidRequestIDError)
     end
 
     it 'determines if a certain request exists' do

@@ -51,6 +51,7 @@ shared_context 'request_context' do
     )
   }
 
-  let(:request) { Request.from_github(::GitReview::Server.new, request_hash) }
+  let(:request) { ::GitReview::Request.from_github(::GitReview::Server.new,
+                                                   request_hash) }
 
 end

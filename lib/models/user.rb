@@ -1,7 +1,11 @@
-class User
+module GitReview
 
-  include Accessible
+  class User
 
-  attr_accessor :login
+    include Accessible
+
+    attr_accessor :login
+
+  end
 
 end

@@ -1,8 +1,12 @@
-class Repository
+module GitReview
 
-  include Accessible
+  class Repository
 
-  attr_accessor :owner,
-                :name
+    include Accessible
+
+    attr_accessor :owner,
+                  :name
+
+  end
 
 end

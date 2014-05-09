@@ -13,7 +13,7 @@ describe 'Commands' do
     provider.stub(:configure_access).and_return(user_login)
     request.inspect
     provider.stub_chain(:client, :pull_request).and_return(request_hash)
-    Request.stub(:from_github).and_return(request)
+    ::GitReview::Request.stub(:from_github).and_return(request)
     subject.stub :puts
   end
 
@@ -39,7 +39,7 @@ describe 'Commands' do
     it 'allows to sort the list by adding ' + '--reverse'.pink do
       requests = [req1, req2]
       server.stub_chain(:current_requests_full, :reject).and_return(requests)
-      Request.any_instance.stub :summary
+      ::GitReview::Request.any_instance.stub :summary
       requests.stub(:sort_by!).and_return(requests)
       requests.should_receive :reverse!
       subject.list true
