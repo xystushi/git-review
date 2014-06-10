@@ -20,7 +20,7 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'yajl-ruby'
   s.add_runtime_dependency 'hashie'
   s.add_runtime_dependency 'faraday'
-  s.add_runtime_dependency 'faraday_middleware'
+  s.add_runtime_dependency 'faraday_middleware', '~> 0.9.1'
   s.add_runtime_dependency 'oauth'
   s.add_runtime_dependency 'simple_oauth'
   s.add_runtime_dependency 'gli', '~> 2.8.0'

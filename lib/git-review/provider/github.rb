@@ -17,7 +17,7 @@ module GitReview
       def request(number)
         raise ::GitReview::InvalidRequestIDError unless number
         attributes = client.pull_request(source_repo, number)
-        Request.from_github(server, attributes)
+        ::GitReview::Request.from_github(server, attributes)
       rescue Octokit::NotFound
         raise ::GitReview::InvalidRequestIDError
       end
@@ -275,40 +275,42 @@ module GitReview
 
   end
 
-end
+  # GitHub specific constructor for git-review's request model.
+  class Request
 
+    # Create a new request instance from a GitHub-structured attributes hash.
+    def self.from_github(server, response)
+      self.new(
+          server: server,
+          number: response.number,
+          title: response.title,
+          body: response.body,
+          state: response.state,
+          html_url: response._links.html.href,
+          # FIXME: Where do we get the patch URL from?
+          patch_url: nil,
+          updated_at: response.updated_at,
+          comments: response.comments,
+          review_comments: response.review_comments,
+          head: {
+              sha: response.head.sha,
+              ref: response.head.ref,
+              label: response.head.label,
+              user: {
+                  login: response.head.user.login
+              },
+              repo: {
+                  # NOTE: This can become nil, if the repo has been deleted ever since.
+                  owner: (response.head.repo ? response.head.repo.owner : nil),
+                  name: (response.head.repo ? response.head.repo.name : nil)
+              }
+          }
+      )
+    end
 
-# GitHub specific constructor for git-review's request model.
-class Request
-
-  # Create a new request instance from a GitHub-structured attributes hash.
-  def self.from_github(server, response)
-    self.new(
-      server: server,
-      number: response.number,
-      title: response.title,
-      body: response.body,
-      state: response.state,
-      html_url: response._links.html.href,
-      # FIXME: Where do we get the patch URL from?
-      patch_url: nil,
-      updated_at: response.updated_at,
-      comments: response.comments,
-      review_comments: response.review_comments,
-      head: {
-        sha: response.head.sha,
-        ref: response.head.ref,
-        label: response.head.label,
-        user: {
-          login: response.head.user.login
-        },
-        repo: {
-          # NOTE: This can become nil, if the repo has been deleted ever since.
-          owner: (response.head.repo ? response.head.repo.owner : nil),
-          name: (response.head.repo ? response.head.repo.name : nil)
-        }
-      }
-    )
   end
 
 end
+
+
+

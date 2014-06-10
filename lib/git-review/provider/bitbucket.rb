@@ -3,6 +3,32 @@ require 'OAuth'
 
 module GitReview
 
+  # BitBucket specific constructor for git-review's request model.
+  class Request
+    def self.from_bitbucket(server, response)
+       self.new(
+           server: server,
+           number: response['id'],
+           title: response['title'],
+           body: response['description'],
+           state: response['state'],
+           updated_at: response['updated_on'],
+           html_url: response['links']['html'],
+           patch_url: response['links']['diff'],
+           head: {
+               sha: response['source']['commit']['hash'],
+
+               user: {
+                   login: response['author']['username']
+               },
+               repo: {
+
+               }
+           }
+       )
+    end
+  end
+
   module Provider
 
     class Bitbucket < Base
@@ -13,7 +39,21 @@ module GitReview
 
       def configure_access
         configure_oauth unless authenticated?
-        @connection = connection
+        @client = Bucketkit::Client.new login: settings.username
+        @client.login
+      end
+
+      def current_requests_full(repo = source_repo)
+        @client.pull_requests(repo)
+      end
+
+      def request(number)
+        @client.pull_request(source_repo, number)
+      end
+
+      def request_exists?(number)
+        request = request(number)
+        !!request
       end
 
     private
@@ -138,6 +178,22 @@ module GitReview
                   :token_secret => settings.bitbucket_token_secret
               }
             end
+      end
+
+      # extract user and project name from BitBucket URL.
+      def url_matching(url)
+        matches = /bitbucket\.org.(.*?)\/(.*)/.match(url)
+        matches ? [matches[1], matches[2].sub(/\.git\z/, '')] : [nil, nil]
+      end
+
+      # look for 'insteadof' substitutions in URL.
+      def insteadof_matching(config, url)
+        first_match = config.keys.collect { |key|
+          [config[key], /url\.(.*bitbucket\.org.*)\.insteadof/.match(key)]
+        }.find { |insteadof_url, true_url|
+          url.index(insteadof_url) and true_url != nil
+        }
+        first_match ? [first_match[0], first_match[1][1]] : [nil, nil]
       end
 
     end
