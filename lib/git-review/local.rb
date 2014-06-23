@@ -234,8 +234,9 @@ module GitReview
 
     # @return [Boolean] whether a specified commit has already been merged.
     def merged?(sha)
-      branches = git_call("branch --contains #{sha} 2>&1").split("\n").
-          collect { |b| b.delete('*').strip }
+      out = git_call("branch --contains #{sha} 2>&1")
+      return false if out.strip.start_with?('error: malformed object name')
+      branches = out .split("\n").collect { |b| b.delete('*').strip }
       branches.include?(target_branch)
     end
 

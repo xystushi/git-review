@@ -51,6 +51,12 @@ module GitReview
         requests
       end
 
+      def pending_requests(repo = source_repo)
+        current_requests_full(repo).reject { |request|
+          local.merged? request.head.sha
+        }.sort_by!(&:number)
+      end
+
       def send_pull_request(to_upstream = false)
         target_repo = local.target_repo(to_upstream)
         head = local.head
@@ -257,7 +263,7 @@ module GitReview
 
       # extract user and project name from GitHub URL.
       def url_matching(url)
-        matches = /github\.com.(.*?)\/(.*)/.match(url)
+        matches = /github\.com.*:(.*?)\/(.*)/.match(url)
         matches ? [matches[1], matches[2].sub(/\.git\z/, '')] : [nil, nil]
       end
 

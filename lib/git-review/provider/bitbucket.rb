@@ -1,5 +1,6 @@
 require 'faraday_middleware'
 require 'OAuth'
+require 'bucketkit'
 
 module GitReview
 
@@ -39,7 +40,10 @@ module GitReview
 
       def configure_access
         configure_oauth unless authenticated?
-        @client = Bucketkit::Client.new login: settings.username
+        @client = ::Bucketkit::Client.new(
+            login: settings.bitbucket_username,
+            oauth_tokens: oauth_tokens
+        )
         @client.login
       end
 
@@ -54,6 +58,12 @@ module GitReview
       def request_exists?(number)
         request = request(number)
         !!request
+      end
+
+      def pending_requests(repo = source_repo)
+        @client.pull_requests(repo).values.reject { |request|
+          local.merged? request.source.commit.hash
+        }.sort_by!(&:id)
       end
 
     private
@@ -145,6 +155,7 @@ module GitReview
         settings.bitbucket_consumer_secret = @consumer_secret
         settings.bitbucket_token = @token
         settings.bitbucket_token_secret = @token_secret
+        settings.bitbucket_username = @username
         settings.save!
         puts "OAuth token successfully created.\n"
       end
