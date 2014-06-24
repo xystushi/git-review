@@ -9,21 +9,22 @@ module GitReview
     def self.from_bitbucket(server, response)
        self.new(
            server: server,
-           number: response['id'],
-           title: response['title'],
-           body: response['description'],
-           state: response['state'],
-           updated_at: response['updated_on'],
-           html_url: response['links']['html'],
-           patch_url: response['links']['diff'],
+           number: response.id,
+           title: response.title,
+           body: response.description,
+           state: response.state,
+           updated_at: response.updated_on,
+           html_url: response.links.html,
+           patch_url: response.links.diff,
+           comments: response.comments,
            head: {
-               sha: response['source']['commit']['hash'],
-
+               sha: response.source.commit.hash,
                user: {
-                   login: response['author']['username']
+                   login: response.author.username
                },
                repo: {
-
+                   owner: response.author.username,
+                   name: response.source.repository.name
                }
            }
        )
@@ -63,7 +64,16 @@ module GitReview
       def pending_requests(repo = source_repo)
         @client.pull_requests(repo).values.reject { |request|
           local.merged? request.source.commit.hash
-        }.sort_by!(&:id)
+        }.sort_by!(&:id).collect { |attr|
+          # unlike github, bitbucket's pull request doesn't have comments info,
+          # therefore we need to fire another request
+          attr.comments = @client.pull_request_comments(repo, attr.id).values
+          ::GitReview::Request.from_bitbucket(server, attr)
+        }
+      end
+
+      def comments_count(request)
+        request.comments.size
       end
 
     private

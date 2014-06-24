@@ -44,7 +44,7 @@ module GitReview
         requests = []
         client.pull_requests(repo).each do |req|
           threads << Thread.new {
-            requests << client.pull_request(repo, req.number)
+            requests << request(req.number)
           }
         end
         threads.each(&:join)
@@ -313,7 +313,6 @@ module GitReview
           }
       )
     end
-
   end
 
 end
