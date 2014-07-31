@@ -19,6 +19,7 @@ module GitReview
            comments: response.comments,
            head: {
                sha: response.source.commit.hash,
+               label: response.source.repository.name,
                user: {
                    login: response.author.username
                },
@@ -53,7 +54,10 @@ module GitReview
       end
 
       def request(number)
-        @client.pull_request(source_repo, number)
+        raise ::GitReview::InvalidRequestIDError unless number
+        attributes = @client.pull_request(source_repo, number)
+        attributes.comments = @client.pull_request_comments(source_repo, number).values
+        ::GitReview::Request.from_bitbucket(server, attributes)
       end
 
       def request_exists?(number)
@@ -75,6 +79,8 @@ module GitReview
       def comments_count(request)
         request.comments.size
       end
+
+      # def discussion()
 
     private
 
